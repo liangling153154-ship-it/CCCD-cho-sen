@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check-in CCCD - Sen's Homestay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; max-width: 480px; margin: auto; padding: 20px; background: #f4f7f9; }
+    .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    h2 { color: #1a73e8; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    label { font-weight: bold; display: block; margin-bottom: 6px; color: #555; }
+    input[type="text"] { width: 100%; padding: 14px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; }
+    input[type="text"]:focus { border-color: #1a73e8; outline: none; }
+    button { width: 100%; padding: 14px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-bottom: 8px; }
+    .btn-scan   { background: #1a73e8; color: white; }
+    .btn-scan:active { background: #1557b0; }
+    .btn-upload-label { background: #34a853; color: white; display: block; text-align: center; width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 8px; }
+    .btn-upload-label:active { background: #2d8e47; }
+    .action-buttons { display: none; gap: 10px; margin-bottom: 8px; }
+    .btn-stop   { background: #e53935; color: white; flex: 1; margin-bottom: 0; }
+    .btn-switch { background: #fbbc04; color: #333;  flex: 1; margin-bottom: 0; }
+
+    /* Engine badge */
+    #engine-badge {
+      display: none; text-align: center; font-size: 11px; font-weight: bold;
+      padding: 4px 10px; border-radius: 20px; margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+    #engine-badge.native  { background: #e8f0fe; color: #1a73e8; border: 1px solid #c5d8fb; }
+    #engine-badge.jsqr    { background: #fff3e0; color: #e65100; border: 1px solid #ffd095; }
+
+    /* ── Viewfinder ── */
+    #vf-wrap {
+      position: relative; margin: 12px 0;
+      border-radius: 8px; overflow: hidden;
+      background: #000;
+      display: none;
+    }
+    #vf-video { display: block; width: 100%; }
+    #vf-canvas { display: none; }
+
+    /* 4 dim pieces */
+    .ov { position: absolute; background: rgba(0,0,0,0.5); pointer-events: none; }
+
+    /* Corner brackets */
+    .corner {
+      position: absolute; width: 24px; height: 24px;
+      border-color: #fff; border-style: solid; pointer-events: none;
+    }
+    .corner-tl { top:0; left:0;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .corner-tr { top:0; right:0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .corner-bl { bottom:0; left:0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .corner-br { bottom:0; right:0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
+    /* Laser */
+    #laser {
+      position: absolute; left: 0; height: 2px;
+      background: linear-gradient(to right, transparent, #1a73e8 25%, #1a73e8 75%, transparent);
+      box-shadow: 0 0 6px 2px rgba(26,115,232,0.6);
+      pointer-events: none;
+    }
+    /* Tip */
+    #tip {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.6); color: #ffffffcc;
+      font-size: 12px; text-align: center; padding: 6px;
+      pointer-events: none;
+    }
+
+    #status { padding: 16px; border-radius: 8px; display: none; margin-top: 12px; font-size: 15px; line-height: 1.6; }
+    .success { background: #e8f5e9; border-left: 4px solid #43a047; color: #1e4620; }
+    .error   { background: #ffebee; border-left: 4px solid #e53935; color: #b71c1c; }
+    .loading { background: #e8f0fe; border-left: 4px solid #1a73e8; color: #0d47a1; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h2>
+    📋 Quét CCCD Nội Địa
+    <svg width="28" height="20" viewBox="0 0 900 600" style="border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.2)">
+      <rect fill="#da251d" width="900" height="600"/>
+      <polygon fill="#ffcd00" points="450,114 534,372 314,213 586,213 366,372"/>
+    </svg>
+  </h2>
+
+  <div id="engine-badge"></div>
+
+  <label>Số phòng:</label>
+  <input type="text" id="room" placeholder="Nhập số phòng (VD: 201)" autofocus />
+
+  <button class="btn-scan" id="btnScan" onclick="startScan()">📷 Mở Camera Quét QR</button>
+
+  <label for="file-input" class="btn-upload-label" id="btnUpload">📂 Tải Ảnh Có Sẵn</label>
+  <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFile(event)">
+
+  <div class="action-buttons" id="actionBtns">
+    <button class="btn-stop"   onclick="stopScan()">⏹ Dừng</button>
+    <button class="btn-switch" onclick="switchCam()">🔄 Đổi Ống Kính</button>
+  </div>
+
+  <div id="vf-wrap">
+    <video id="vf-video" autoplay playsinline muted></video>
+    <canvas id="vf-canvas"></canvas>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<!-- jsQR — lightweight fallback, great on iOS Safari < 17 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyN9ZANDPQCdOR1CqCVhKZ8CCCHYv3DJuPVtydya-e5zI5gFNKJTLyfxNGxaSt-btq6/exec';
+
+/* ═══════════════════════════════════════════════════════
+   DETECT PLATFORM & ENGINE
+   Priority:
+   1. Native BarcodeDetector (Chrome Android / Samsung / Safari 17+ iOS) ← fastest
+   2. jsQR canvas loop (universal fallback, works on all browsers)
+═══════════════════════════════════════════════════════ */
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+// BarcodeDetector: available on Chrome Android, Samsung Browser, and Safari 17+ (iOS 17+)
+const HAS_BARCODE_DETECTOR = ('BarcodeDetector' in window);
+
+// Detect engine name for badge
+let ENGINE = HAS_BARCODE_DETECTOR
+  ? (IS_IOS ? 'Apple Vision (BarcodeDetector)' : 'Google ML Kit (BarcodeDetector)')
+  : 'jsQR (Canvas Fallback)';
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let stream      = null;
+let cameras     = [];
+let camIdx      = 0;
+let scanLoop    = null;
+let scanned     = false;
+let decoder     = null;   // BarcodeDetector instance
+let laserTimer  = null;
+let laserDir    = 1;
+let laserPos    = 0;
+
+// jsQR timing throttle
+let lastJsqrTs  = 0;
+const JSQR_INTERVAL = IS_IOS ? 120 : 80; // ms between jsQR frames (iOS slower canvas)
+
+const video  = document.getElementById('vf-video');
+const canvas = document.getElementById('vf-canvas');
+const wrap   = document.getElementById('vf-wrap');
+const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+
+/* ── Show engine badge ── */
+function showEngineBadge() {
+  const badge = document.getElementById('engine-badge');
+  badge.style.display = 'block';
+  badge.className = HAS_BARCODE_DETECTOR ? 'native' : 'jsqr';
+  badge.textContent = HAS_BARCODE_DETECTOR
+    ? (IS_IOS ? '🍎 Apple Vision API' : '🤖 Google ML Kit API')
+    : '📦 jsQR Engine (Canvas)';
+}
+
+/* ═══════════════════════════════════════════════════════
+   INIT DECODER
+═══════════════════════════════════════════════════════ */
+function initDecoder() {
+  showEngineBadge();
+  if (HAS_BARCODE_DETECTOR) {
+    decoder = new BarcodeDetector({ formats: ['qr_code'] });
+    console.log('[QR] Engine: BarcodeDetector —', ENGINE);
+  } else {
+    console.log('[QR] Engine: jsQR canvas loop');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CAMERA HELPERS
+═══════════════════════════════════════════════════════ */
+function scoreCam(label) {
+  const l = label.toLowerCase();
+  if (l.includes('front') || l.includes('trước')) return -1;
+  if (l.includes('ultra') || l.includes('wide')  || l.includes('tele')) return 0;
+  if (l.includes('back')  || l.includes('sau'))   return 3;
+  if (l.includes('main')  || l.includes('0'))     return 2;
+  return 1;
+}
+
+async function getCameras() {
+  // iOS chỉ trả label đầy đủ SAU KHI đã cấp quyền camera.
+  // Nếu chưa có stream nào, mở tạm 1 stream để "unlock" enumerateDevices.
+  const hasPermission = (await navigator.mediaDevices.enumerateDevices())
+    .some(d => d.kind === 'videoinput' && d.label);
+
+  if (!hasPermission) {
+    // Mở nhanh rồi đóng ngay — chỉ để xin quyền & unlock labels
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    tmp.getTracks().forEach(t => t.stop());
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cameras = devices.filter(d => d.kind === 'videoinput');
+  let best = 0;
+  for (let i = 1; i < cameras.length; i++) {
+    if (scoreCam(cameras[i].label) > scoreCam(cameras[best].label)) best = i;
+  }
+  camIdx = best;
+  console.log('[CAM] Found', cameras.length, 'cameras. Best idx:', camIdx, cameras.map(c=>c.label));
+}
+
+async function openCamera(deviceId) {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+  // Không đưa advanced[] vào getUserMedia — iOS Safari hay reject.
+  // Apply focus/zoom SAU KHI có track, dùng try/catch riêng từng feature.
+  const constraints = {
+    video: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      facingMode: deviceId ? undefined : 'environment',
+      width:  { ideal: 1920 },
+      height: { ideal: 1080 },
+    }
+  };
+
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  await video.play();
+
+  const track = stream.getVideoTracks()[0];
+
+  // ── Continuous autofocus ──
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+  } catch(_) {}
+
+  // ── Hardware zoom — iOS 15+ và Android đều qua applyConstraints ──
+  try {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.zoom) {
+      const zMin    = caps.zoom.min ?? 1;
+      const zMax    = caps.zoom.max ?? 1;
+      const zTarget = IS_IOS ? Math.min(2, zMax) : Math.min(3, zMax); // iPhone 2×, Android 3×
+      if (zTarget > zMin) {
+        await track.applyConstraints({ advanced: [{ zoom: zTarget }] });
+        console.log('[CAM] Zoom applied:', zTarget);
+      }
+    }
+  } catch(_) {}
+
+  wrap.style.display = 'block';
+  setTimeout(drawOverlay, 400);
+
+  if (IS_IOS) {
+    wrap.removeEventListener('click', iosFocusTap);
+    wrap.addEventListener('click', iosFocusTap);
+  }
+}
+
+// iOS tap-to-focus: briefly restart stream track to force refocus
+async function iosFocusTap() {
+  if (!stream) return;
+  const track = stream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: 'auto' }] });
+    setTimeout(() => track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(()=>{}), 300);
+  } catch(_) {}
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCAN LOOP — BarcodeDetector (native, fastest)
+   Works on: Chrome Android, Samsung Browser, Safari 17+ (iOS 17+)
+   Apple uses Vision framework under the hood — comparable to ML Kit.
+═══════════════════════════════════════════════════════ */
+function startNativeLoop() {
+  if (scanLoop) cancelAnimationFrame(scanLoop);
+
+  async function tick() {
+    if (!stream || scanned) return;
+    if (video.readyState >= 2) {
+      try {
+        const codes = await decoder.detect(video);
+        if (codes.length > 0) { onDecoded(codes[0].rawValue); return; }
+      } catch(_) {}
+    }
+    scanLoop = requestAnimationFrame(tick);
+  }
+  scanLoop = requestAnimationFrame(tick);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCAN LOOP — jsQR (universal canvas fallback)
+   Works on: all browsers including older iOS Safari
+   Draws video frame to hidden canvas, feeds pixel data to jsQR.
+   Throttled to JSQR_INTERVAL ms to avoid melting old iPhones.
+═══════════════════════════════════════════════════════ */
+function startJsqrLoop() {
+  if (scanLoop) cancelAnimationFrame(scanLoop);
+
+  function tick(ts) {
+    if (!stream || scanned) return;
+    if (video.readyState < 2) { scanLoop = requestAnimationFrame(tick); return; }
+
+    // Throttle
+    if (ts - lastJsqrTs >= JSQR_INTERVAL) {
+      lastJsqrTs = ts;
+
+      const W = video.videoWidth;
+      const H = video.videoHeight;
+      if (W && H) {
+        canvas.width  = W;
+        canvas.height = H;
+        ctx.drawImage(video, 0, 0, W, H);
+        try {
+          const imageData = ctx.getImageData(0, 0, W, H);
+          const result = jsQR(imageData.data, W, H, {
+            inversionAttempts: 'dontInvert'
+          });
+          if (result) { onDecoded(result.data); return; }
+        } catch(_) {}
+      }
+    }
+    scanLoop = requestAnimationFrame(tick);
+  }
+  scanLoop = requestAnimationFrame(tick);
+}
+
+/* ═══════════════════════════════════════════════════════
+   OVERLAY — custom viewfinder
+═══════════════════════════════════════════════════════ */
+function drawOverlay() {
+  wrap.querySelectorAll('.ov,.corner,#laser,#tip,.box-frame').forEach(e => e.remove());
+  if (laserTimer) { clearInterval(laserTimer); laserTimer = null; }
+
+  const W = video.offsetWidth  || wrap.offsetWidth;
+  const H = video.offsetHeight || wrap.offsetHeight || W;
+  if (!W || !H) { setTimeout(drawOverlay, 200); return; }
+
+  const side = Math.floor(Math.min(W, H) * 0.85);
+  const bL   = Math.floor((W - side) / 2);
+  const bT   = Math.floor((H - side) / 2);
+
+  const mk = (tag, styles, parent) => {
+    const el = document.createElement(tag || 'div');
+    Object.assign(el.style, styles);
+    (parent || wrap).appendChild(el);
+    return el;
+  };
+
+  const base = { position:'absolute', pointerEvents:'none' };
+  mk('div', {...base, top:'0',     left:'0', right:'0',   height: bT+'px',             background:'rgba(0,0,0,0.5)'}).className='ov';
+  mk('div', {...base, bottom:'0',  left:'0', right:'0',   height: (H-bT-side)+'px',    background:'rgba(0,0,0,0.5)'}).className='ov';
+  mk('div', {...base, top:bT+'px', left:'0', width:bL+'px', height:side+'px',           background:'rgba(0,0,0,0.5)'}).className='ov';
+  mk('div', {...base, top:bT+'px', right:'0', width:(W-bL-side)+'px', height:side+'px', background:'rgba(0,0,0,0.5)'}).className='ov';
+
+  const frame = mk('div', { ...base, top:bT+'px', left:bL+'px', width:side+'px', height:side+'px' });
+  frame.className = 'box-frame';
+  ['corner-tl','corner-tr','corner-bl','corner-br'].forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'corner ' + c;
+    frame.appendChild(d);
+  });
+
+  const laser = mk('div', { ...base, left:bL+'px', width:side+'px', top:bT+'px', height:'2px',
+    background:'linear-gradient(to right, transparent, #1a73e8 25%, #1a73e8 75%, transparent)',
+    boxShadow:'0 0 6px 2px rgba(26,115,232,0.6)' });
+  laser.id = 'laser';
+  laserDir = 1; laserPos = 0;
+  laserTimer = setInterval(() => {
+    if (!document.contains(laser)) { clearInterval(laserTimer); return; }
+    laserPos += laserDir * 2;
+    if (laserPos >= side - 2) laserDir = -1;
+    if (laserPos <= 0)        laserDir = 1;
+    laser.style.top = (bT + laserPos) + 'px';
+  }, 16);
+
+  const tip = mk('div', { ...base, bottom:'0', left:'0', right:'0',
+    background:'rgba(0,0,0,0.6)', color:'#ffffffcc',
+    fontSize:'12px', textAlign:'center', padding:'6px' });
+  tip.id = 'tip';
+  tip.textContent = IS_IOS
+    ? '💡 Đưa QR vào khung · Chạm để lấy nét · Giữ thẳng tay'
+    : '💡 Đưa QR vào khung · cách 15-20cm · giữ thẳng tay';
+}
+
+/* ═══════════════════════════════════════════════════════
+   PUBLIC ACTIONS
+═══════════════════════════════════════════════════════ */
+async function startScan() {
+  const room = document.getElementById('room').value.trim();
+  if (!room) { alert('Vui lòng nhập số phòng trước!'); return; }
+
+  scanned = false;
+  document.getElementById('btnScan').style.display    = 'none';
+  document.getElementById('btnUpload').style.display  = 'none';
+  document.getElementById('actionBtns').style.display = 'flex';
+  showStatus('⏳ Đang khởi động camera...', 'loading');
+
+  try {
+    await getCameras();
+    const devId = cameras[camIdx]?.deviceId;
+    await openCamera(devId);
+
+    if (HAS_BARCODE_DETECTOR) {
+      startNativeLoop();
+      showStatus(`📷 ${IS_IOS ? '🍎 Apple Vision' : '🤖 ML Kit'} — đưa QR vào khung.`, 'loading');
+    } else {
+      startJsqrLoop();
+      showStatus('📷 jsQR — đưa QR vào khung.', 'loading');
+    }
+  } catch(err) {
+    showStatus('❌ Lỗi mở camera: ' + err.message, 'error');
+  }
+}
+
+async function switchCam() {
+  if (cameras.length < 2) { alert('Chỉ có 1 ống kính!'); return; }
+  camIdx = (camIdx + 1) % cameras.length;
+  if (scanLoop) { cancelAnimationFrame(scanLoop); scanLoop = null; }
+  await openCamera(cameras[camIdx].deviceId);
+  if (HAS_BARCODE_DETECTOR) startNativeLoop(); else startJsqrLoop();
+}
+
+function stopScan() {
+  if (scanLoop)  { cancelAnimationFrame(scanLoop); scanLoop = null; }
+  if (stream)    { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  wrap.querySelectorAll('.ov,.corner,#laser,#tip,.box-frame').forEach(e => e.remove());
+  if (laserTimer) { clearInterval(laserTimer); laserTimer = null; }
+  wrap.removeEventListener('click', iosFocusTap);
+  wrap.style.display = 'none';
+
+  document.getElementById('btnScan').style.display    = 'block';
+  document.getElementById('btnUpload').style.display  = 'block';
+  document.getElementById('actionBtns').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════
+   FILE UPLOAD
+═══════════════════════════════════════════════════════ */
+async function handleFile(event) {
+  const room = document.getElementById('room').value.trim();
+  if (!room) { alert('Vui lòng nhập số phòng trước!'); event.target.value=''; return; }
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showStatus(`📂 <b>${file.name}</b> — đang tìm mã QR...`, 'loading');
+
+  if (HAS_BARCODE_DETECTOR) {
+    try {
+      const bmp = await createImageBitmap(file);
+      const codes = await decoder.detect(bmp);
+      if (codes.length) onDecoded(codes[0].rawValue);
+      else showStatus('❌ Không tìm thấy QR. Thử crop ảnh gần hơn.', 'error');
+    } catch(e) {
+      showStatus('❌ Lỗi đọc ảnh: ' + e.message, 'error');
+    }
+  } else {
+    // jsQR file scan
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const cx = c.getContext('2d');
+      cx.drawImage(img, 0, 0);
+      const id = cx.getImageData(0, 0, c.width, c.height);
+      const result = jsQR(id.data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
+      URL.revokeObjectURL(url);
+      if (result) onDecoded(result.data);
+      else showStatus('❌ Không tìm thấy QR. Thử crop ảnh gần hơn.', 'error');
+    };
+    img.onerror = () => showStatus('❌ Lỗi đọc ảnh.', 'error');
+    img.src = url;
+  }
+  event.target.value = '';
+}
+
+/* ═══════════════════════════════════════════════════════
+   DECODE RESULT → GOOGLE SHEETS
+═══════════════════════════════════════════════════════ */
+function onDecoded(text) {
+  if (scanned) return;
+  scanned = true;
+  stopScan();
+
+  const parts = text.split('|');
+  if (parts.length < 7) {
+    showStatus('❌ <b>QR không hợp lệ</b> — không phải CCCD chuẩn VN (cần ≥ 7 trường).', 'error');
+    return;
+  }
+
+  const room = document.getElementById('room').value.trim();
+  showStatus(`✅ <b>Đọc CCCD thành công!</b><br>👤 <b>${parts[2]}</b><br>🏠 ${parts[5]}<br><i>🚀 Đang lưu lên Sheets...</i>`, 'loading');
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ qrData: text, room })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      showStatus(`🎉 <b>LƯU THÀNH CÔNG!</b><br>👤 <b>${d.name}</b><br>🛏️ Phòng <b>${room}</b><hr style="border:0;border-top:1px solid #c8e6c9;margin:8px 0"><small>✨ Sẵn sàng khách tiếp theo.</small>`, 'success');
+      document.getElementById('room').value = '';
+    } else {
+      showStatus('❌ Sheets báo lỗi: ' + d.error, 'error');
+    }
+  })
+  .catch(() => showStatus('❌ Lỗi mạng — không kết nối được Sheets.', 'error'));
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.style.display = 'block';
+  el.className = type;
+  el.innerHTML = msg;
+}
+
+/* ── Boot ── */
+initDecoder();
+</script>
+</body>
+</html>
