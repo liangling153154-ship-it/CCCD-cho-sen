@@ -19,6 +19,8 @@
     .btn-upload-label:active { background: #2d8e47; }
     .btn-ai { background: #9c27b0; color: white; }
     .btn-ai:active { background: #7b1fa2; }
+    .btn-ai-upload-label { background: #7b1fa2; color: white; display: block; text-align: center; width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 8px; }
+    .btn-ai-upload-label:active { background: #6a1b9a; }
     .action-buttons { display: none; gap: 10px; margin-bottom: 8px; }
     .btn-stop   { background: #e53935; color: white; flex: 1; margin-bottom: 0; }
     .btn-switch { background: #fbbc04; color: #333;  flex: 1; margin-bottom: 0; }
@@ -119,9 +121,12 @@
 
   <div class="divider">hoặc trích xuất bằng AI</div>
 
-  <!-- AI button -->
-  <button class="btn-ai" id="btnAI" onclick="triggerAI()">🤖 Chụp / Tải Ảnh CCCD (AI)</button>
-  <input type="file" id="ai-file-input" accept="image/*" capture="environment" style="display:none" onchange="handleAIFile(event)">
+  <!-- AI buttons -->
+  <button class="btn-ai" id="btnAI" onclick="triggerAICamera()">📷 Chụp Ảnh CCCD (AI)</button>
+  <input type="file" id="ai-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleAIFile(event)">
+
+  <label for="ai-gallery-input" class="btn-ai-upload-label" id="btnAIUpload" onclick="return checkRoomBeforeUpload()">🖼️ Tải Ảnh CCCD Từ Thư Viện (AI)</label>
+  <input type="file" id="ai-gallery-input" accept="image/*" style="display:none" onchange="handleAIFile(event)">
 
   <div id="vf-wrap">
     <video id="vf-video" autoplay playsinline muted></video>
@@ -372,10 +377,11 @@ async function startScan() {
   if (!room) { alert('Vui lòng nhập số phòng trước!'); return; }
   showAddrToggle(false);
   scanned = false;
-  document.getElementById('btnScan').style.display    = 'none';
-  document.getElementById('btnUpload').style.display  = 'none';
-  document.getElementById('btnAI').style.display      = 'none';
-  document.getElementById('actionBtns').style.display = 'flex';
+  document.getElementById('btnScan').style.display      = 'none';
+  document.getElementById('btnUpload').style.display    = 'none';
+  document.getElementById('btnAI').style.display        = 'none';
+  document.getElementById('btnAIUpload').style.display  = 'none';
+  document.getElementById('actionBtns').style.display   = 'flex';
   showStatus('⏳ Đang khởi động camera...', 'loading');
   try {
     await getCameras();
@@ -408,10 +414,11 @@ function stopScan() {
   if (laserTimer) { clearInterval(laserTimer); laserTimer = null; }
   wrap.removeEventListener('click', iosFocusTap);
   wrap.style.display = 'none';
-  document.getElementById('btnScan').style.display    = 'block';
-  document.getElementById('btnUpload').style.display  = 'block';
-  document.getElementById('btnAI').style.display      = 'block';
-  document.getElementById('actionBtns').style.display = 'none';
+  document.getElementById('btnScan').style.display     = 'block';
+  document.getElementById('btnUpload').style.display   = 'block';
+  document.getElementById('btnAI').style.display       = 'block';
+  document.getElementById('btnAIUpload').style.display = 'block';
+  document.getElementById('actionBtns').style.display  = 'none';
 }
 
 /* ═══════════════════════════════════════════════
@@ -486,11 +493,18 @@ function onDecoded(text) {
 /* ═══════════════════════════════════════════════
    AI — trigger file picker
 ═══════════════════════════════════════════════ */
-function triggerAI() {
+function triggerAICamera() {
   const room = document.getElementById('room').value.trim();
   if (!room) { alert('Vui lòng nhập số phòng trước!'); return; }
   showAddrToggle(true);
-  document.getElementById('ai-file-input').click();
+  document.getElementById('ai-camera-input').click();
+}
+
+function checkRoomBeforeUpload() {
+  const room = document.getElementById('room').value.trim();
+  if (!room) { alert('Vui lòng nhập số phòng trước!'); return false; }
+  showAddrToggle(true);
+  return true;
 }
 
 /* ═══════════════════════════════════════════════
