@@ -30,7 +30,7 @@
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e0e0e0; }
 
     /* Address toggle */
-    #addr-toggle-wrap { margin-bottom: 16px; display: none; }
+    #addr-toggle-wrap { margin-bottom: 16px; display: block; }
     #addr-toggle-wrap label { margin-bottom: 8px; }
     .toggle-row { display: flex; gap: 0; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
     .toggle-btn { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; border: none; cursor: pointer; background: #f5f5f5; color: #555; transition: 0.15s; margin-bottom: 0; border-radius: 0; }
@@ -99,15 +99,6 @@
   <label>Số phòng:</label>
   <input type="text" id="room" placeholder="Nhập số phòng (VD: 201)" autofocus />
 
-  <!-- Toggle địa chỉ cũ/mới — hiện khi dùng AI -->
-  <div id="addr-toggle-wrap">
-    <label>Loại địa chỉ trên CCCD:</label>
-    <div class="toggle-row">
-      <button class="toggle-btn active" id="btn-addr-old" onclick="setAddrType('old')">📍 Địa chỉ cũ (3 cấp)</button>
-      <button class="toggle-btn"        id="btn-addr-new" onclick="setAddrType('new')">🆕 Địa chỉ mới (sau 1/7/2025)</button>
-    </div>
-  </div>
-
   <!-- QR buttons -->
   <button class="btn-scan" id="btnScan" onclick="startScan()">📷 Mở Camera Quét QR</button>
 
@@ -127,6 +118,15 @@
 
   <label for="ai-gallery-input" class="btn-ai-upload-label" id="btnAIUpload" onclick="return checkRoomBeforeUpload()">🖼️ Tải Ảnh CCCD Từ Thư Viện (AI)</label>
   <input type="file" id="ai-gallery-input" accept="image/*" style="display:none" onchange="handleAIFile(event)">
+
+  <!-- Toggle địa chỉ cũ/mới — chỉ dùng cho AI -->
+  <div id="addr-toggle-wrap">
+    <label>Loại địa chỉ trên CCCD:</label>
+    <div class="toggle-row">
+      <button class="toggle-btn active" id="btn-addr-old" onclick="setAddrType('old')">📍 Địa chỉ cũ (3 cấp)</button>
+      <button class="toggle-btn"        id="btn-addr-new" onclick="setAddrType('new')">🆕 Địa chỉ mới (sau 1/7/2025)</button>
+    </div>
+  </div>
 
   <div id="vf-wrap">
     <video id="vf-video" autoplay playsinline muted></video>
@@ -182,9 +182,6 @@ function setAddrType(type) {
   document.getElementById('btn-addr-new').className = 'toggle-btn' + (type === 'new' ? ' active' : '');
 }
 
-function showAddrToggle(show) {
-  document.getElementById('addr-toggle-wrap').style.display = show ? 'block' : 'none';
-}
 
 /* ═══════════════════════════════════════════════
    ENGINE BADGE
@@ -375,7 +372,6 @@ function drawOverlay() {
 async function startScan() {
   const room = document.getElementById('room').value.trim();
   if (!room) { alert('Vui lòng nhập số phòng trước!'); return; }
-  showAddrToggle(false);
   scanned = false;
   document.getElementById('btnScan').style.display      = 'none';
   document.getElementById('btnUpload').style.display    = 'none';
@@ -496,14 +492,12 @@ function onDecoded(text) {
 function triggerAICamera() {
   const room = document.getElementById('room').value.trim();
   if (!room) { alert('Vui lòng nhập số phòng trước!'); return; }
-  showAddrToggle(true);
   document.getElementById('ai-camera-input').click();
 }
 
 function checkRoomBeforeUpload() {
   const room = document.getElementById('room').value.trim();
   if (!room) { alert('Vui lòng nhập số phòng trước!'); return false; }
-  showAddrToggle(true);
   return true;
 }
 
